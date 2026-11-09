@@ -1,0 +1,38 @@
+diff --git a/1.20.0/cilium-operator-generic/rockcraft.yaml b/1.20.0/cilium-operator-generic/rockcraft.yaml
+index 172cf19..45ee095 100644
+--- a/1.20.0/cilium-operator-generic/rockcraft.yaml
++++ b/1.20.0/cilium-operator-generic/rockcraft.yaml
+@@ -9,6 +9,7 @@ build-base: ubuntu@22.04
+ platforms:
+   amd64:
+   arm64:
++  riscv64:
+ 
+ environment:
+   GOPS_CONFIG_DIR: "/"
+@@ -58,7 +59,10 @@ parts:
+       - CGO_ENABLED: 1
+     override-build: |
+       cd $CRAFT_PART_SRC_WORK
+-      go install github.com/go-delve/delve/cmd/dlv@v1.26.3
++      # Delve does not support riscv64, so the debugger is left out there.
++      if [ "$CRAFT_ARCH_BUILD_FOR" != "riscv64" ]; then
++        go install github.com/go-delve/delve/cmd/dlv@v1.26.3
++      fi
+       go install -ldflags "-s -w" debug-wrapper.go
+ 
+   # https://github.com/cilium/cilium/blob/v1.20.0/images/builder/install-protoc.sh
+@@ -129,8 +133,12 @@ parts:
+   openssl:
+     plugin: nil
+     stage-packages:
+-      - openssl-fips-module-3 # a Pro only FIPS package for openssl
+       - openssl # now automatically selected from fips-preview
++      # A Pro only FIPS package for openssl. The Ubuntu Pro fips-updates
++      # archive does not provide it for riscv64.
++      - on riscv64: []
++      - else:
++          - openssl-fips-module-3
+ 
+   # https://github.com/cilium/cilium/blob/v1.20.0/images/operator/Dockerfile
+   # https://github.com/cilium/cilium/blob/v1.20.0/Makefile#L65-L66

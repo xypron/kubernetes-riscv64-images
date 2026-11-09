@@ -1,0 +1,2 @@
+# Built images (tar files) stay out of the repository
+/*/build/

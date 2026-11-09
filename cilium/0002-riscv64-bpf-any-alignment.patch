@@ -1,0 +1,30 @@
+diff --git a/pkg/bpf/collection.go b/pkg/bpf/collection.go
+index 2826fd49..f49ee3fa 100644
+--- a/pkg/bpf/collection.go
++++ b/pkg/bpf/collection.go
+@@ -10,6 +10,7 @@ import (
+ 	"log/slog"
+ 	"os"
+ 	"path"
++	"runtime"
+ 	"strings"
+ 	"unsafe"
+ 
+@@ -272,6 +273,17 @@ func LoadCollection(logger *slog.Logger, spec *ebpf.CollectionSpec, opts *Collec
+ 		return nil, nil, fmt.Errorf("applying program patches: %w", err)
+ 	}
+ 
++	// Kernels without CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS, like the
++	// generic riscv64 kernels, make the verifier reject packet accesses
++	// that are not provably aligned. Misaligned accesses are handled by
++	// the hardware or emulated by the kernel there, so ask the verifier
++	// not to check the alignment.
++	if runtime.GOARCH == "riscv64" {
++		for _, prog := range spec.Programs {
++			prog.Flags |= unix.BPF_F_ANY_ALIGNMENT
++		}
++	}
++
+ 	// Attempt to load the Collection.
+ 	coll, err := ebpf.NewCollectionWithOptions(spec, opts.CollectionOptions)
+ 

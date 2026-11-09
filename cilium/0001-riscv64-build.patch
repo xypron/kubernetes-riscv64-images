@@ -1,0 +1,240 @@
+diff --git a/1.20.0/cilium/rockcraft.yaml b/1.20.0/cilium/rockcraft.yaml
+index e5d3c7b..92eccdf 100644
+--- a/1.20.0/cilium/rockcraft.yaml
++++ b/1.20.0/cilium/rockcraft.yaml
+@@ -4,31 +4,10 @@ description: This rock is a drop in replacement for the cilium/cilium image.
+ version: "1.20.0"
+ license: Apache-2.0
+ 
+-base: ubuntu@22.04
+-build-base: ubuntu@22.04
++base: ubuntu@24.04
++build-base: ubuntu@24.04
+ platforms:
+-  amd64:
+-  arm64:
+-
+-package-repositories:
+-  - type: apt
+-    formats: [deb-src]
+-    components: [main restricted universe multiverse]
+-    suites: [jammy, jammy-updates]
+-    key-id: F6ECB3762474EDA9D21B7022871920D1991BC93C
+-    url: http://archive.ubuntu.com/ubuntu
+-  - type: apt
+-    formats: [deb-src]
+-    components: [main restricted universe multiverse]
+-    suites: [jammy-security]
+-    key-id: F6ECB3762474EDA9D21B7022871920D1991BC93C
+-    url: http://security.ubuntu.com/ubuntu
+-  - type: apt
+-    formats: [deb, deb-src]
+-    components: [main]
+-    suites: [llvm-toolchain-jammy-18, llvm-toolchain-jammy-19]
+-    key-id: 6084F3CF814B57C1CF12EFD515CF4D18AF4F7421
+-    url: http://apt.llvm.org/jammy/
++  riscv64:
+ 
+ environment:
+   HUBBLE_SERVER: "unix:///var/run/cilium/hubble.sock"
+@@ -41,103 +20,6 @@ services:
+     startup: enabled
+ 
+ parts:
+-  # https://github.com/cilium/proxy/blob/v1.37/Dockerfile.builder#L84-L88
+-  bazelisk:
+-    plugin: nil
+-    build-packages:
+-      - wget
+-    overlay-script: |
+-      wget https://github.com/bazelbuild/bazelisk/releases/download/v1.29.0/bazelisk-linux-$CRAFT_ARCH_BUILD_FOR
+-      mv bazelisk-linux-$CRAFT_ARCH_BUILD_FOR /usr/bin/bazelisk
+-      chmod +x /usr/bin/bazelisk
+-      ln -sf /usr/bin/bazelisk /usr/bin/bazel
+-
+-  # https://github.com/cilium/proxy/blob/v1.37/Dockerfile#L17-L24
+-  cilium-envoy:
+-    after: [bazelisk]
+-    plugin: make
+-    source-type: git
+-    source: https://github.com/cilium/proxy.git
+-    # Cilium v1.20.0 ships cilium-envoy v1.37.5, built from the v1.37 branch.
+-    # https://github.com/cilium/cilium/blob/v1.20.0/images/cilium/Dockerfile#L11
+-    source-tag: v1.37
+-    source-depth: 1
+-    build-packages:
+-      - autoconf
+-      - automake
+-      - cmake
+-      - coreutils
+-      - curl
+-      - git
+-      - libtool
+-      - make
+-      - ninja-build
+-      - patch
+-      - patchelf
+-      - python3
+-      - python-is-python3
+-      - unzip
+-      - virtualenv
+-      - wget
+-      - zip
+-      - libc6-dev
+-      - gcc
+-      - binutils
+-      - clang-18
+-      - clang-tools-18
+-      # llvm-config (unversioned, under /usr/lib/llvm-18/bin) ships in the
+-      # llvm-18 package, NOT clang-18. cilium/proxy v1.37 hardcodes
+-      # /usr/lib/llvm-18 as the LLVM prefix and its clang.bazelrc target runs
+-      # `bazel/setup_clang.sh /usr/lib/llvm-18`, which bails out unless
+-      # llvm-config is present there, so llvm-18 is required here.
+-      - llvm-18
+-      - lldb-18
+-      - lld-18
+-      - clang-format-18
+-      - libc++-18-dev
+-      - libc++abi-18-dev
+-      # Envoy's bundled QUICHE uses `static constexpr std::vector` (C++20
+-      # P1004), which requires libstdc++ >= 12; the jammy build-base only ships
+-      # GCC 11. Upstream builds on noble (GCC 13), so install g++-12 here and
+-      # let clang-18 auto-select the newest GCC installation for the C++
+-      # standard library headers and runtime.
+-      - g++-12
+-    override-build: |
+-      export PKG_BUILD=1
+-      export DESTDIR=$CRAFT_PART_INSTALL
+-      export EMAIL=root@localhost
+-      # cilium/proxy v1.37 pins the toolchain to /usr/lib/llvm-18 and its
+-      # generated clang.bazelrc records the build-time PATH as the Bazel action
+-      # env, so put the unversioned LLVM tools (shipped by the apt packages
+-      # under /usr/lib/llvm-18/bin) ahead of everything else.
+-      export PATH="/usr/lib/llvm-18/bin:$PATH"
+-      # Envoy's bazelrc sets `--incompatible_strict_action_env`, so Bazel's cc
+-      # autoconfig resolves the toolchain against a fixed PATH (/usr/local/bin:
+-      # /usr/bin:/bin) that excludes /usr/lib/llvm-18/bin, baking absolute tool
+-      # paths like /usr/bin/clang and /usr/bin/llvm-ar. The apt packages only
+-      # provide versioned /usr/bin/<tool>-18, so both compile actions and the
+-      # rules_foreign_cc host-tool builds (GNU Make: AR=/usr/bin/llvm-ar) fail
+-      # with "No such file or directory". Upstream v1.37's Dockerfile.builder
+-      # creates these unversioned symlinks itself; replicate that here since we
+-      # install via apt. Keep an always-present tool last: the loop's exit
+-      # status is the last iteration's test, and the shell runs under `set -e`.
+-      for tool in clang clang++ clang-cpp lld ld.lld clang-format clang-tidy \
+-                  run-clang-tidy clang-apply-replacements llvm-ar llvm-nm \
+-                  llvm-strip llvm-objcopy llvm-objdump llvm-dwp llvm-cov \
+-                  llvm-symbolizer llvm-config; do
+-        [ -x "/usr/lib/llvm-18/bin/$tool" ] && ln -sf /usr/lib/llvm-18/bin/$tool /usr/bin/$tool
+-      done
+-      git am --ignore-whitespace $CRAFT_PROJECT_DIR/envoy-fixes.patch
+-
+-      make -C proxylib all
+-      mkdir -p $CRAFT_PART_INSTALL/usr/lib/
+-      cp proxylib/libcilium.so $CRAFT_PART_INSTALL/usr/lib/
+-      cp proxylib/libcilium.so /usr/lib/
+-      git rev-parse HEAD >SOURCE_VERSION
+-      make bazel-bin/cilium-envoy
+-      make install
+-      rm -rf /root/.cache/bazel
+-
+   builder-img-deps:
+     plugin: nil
+     build-packages:
+@@ -342,28 +224,12 @@ parts:
+   openssl:
+     plugin: nil
+     stage-packages:
+-      - openssl-fips-module-3 # a Pro only FIPS package for openssl
+-      - openssl # now automatically selected from fips-preview
+-
+-  zig:
+-    plugin: nil
+-    build-packages:
+-      - tar
+-      - curl
+-    override-build: |
+-      ARCH=x86_64
+-      if [ "$CRAFT_ARCH_BUILD_FOR" = "arm64" ]; then
+-        ARCH=aarch64
+-      fi
++      # No openssl-fips-module-3: the Ubuntu Pro fips-updates archive does
++      # not provide it for riscv64.
++      - openssl
+ 
+-      curl -L https://ziglang.org/download/0.15.2/zig-$ARCH-linux-0.15.2.tar.xz -o zig.tar.xz
+-      mkdir -p /zig
+-      tar --strip-components 1 -xf zig.tar.xz -C /zig
+-
+-      ln -sf /zig/zig /usr/bin/zig
+-  
+   cilium:
+-    after: [build-deps, builder-img-deps, zig]
++    after: [build-deps, builder-img-deps]
+     plugin: make
+     source-type: git
+     source: https://github.com/cilium/cilium.git
+@@ -391,8 +257,12 @@ parts:
+       # NOTE (mateoflorido): Patch Cilium Makefiles to use FIPS-compatible build flags
+       find . -name "Makefile*" -exec sed -i 's/CGO_ENABLED=0/CGO_ENABLED=1/g' {} \;
+ 
+-      # Note(Reza): The target must match the glibc version corresponding to the oldest supported host.
+-      CXX="zig c++ -target ${CRAFT_ARCH_TRIPLET_BUILD_FOR}.2.31" CC="zig cc -target ${CRAFT_ARCH_TRIPLET_BUILD_FOR}.2.31" make build-container
++      # The riscv64 kernels have no CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS,
++      # so the BPF verifier needs BPF_F_ANY_ALIGNMENT.
++      patch -p1 < $CRAFT_PROJECT_DIR/0002-riscv64-bpf-any-alignment.patch
++
++      # Native build with the system gcc; the base is the build base.
++      make build-container
+ 
+       make install-container-binary
+       make install-bash-completion
+@@ -410,37 +280,16 @@ parts:
+       craftctl default
+       rm -rf /root/.cache/go-build
+   
++  # clang and llc for the BPF programs, from the Ubuntu archive (apt.llvm.org
++  # has no riscv64 and building LLVM from source takes hours).
+   llvm:
+     plugin: nil
+-    build-packages:
+-      # Required for `apt-get source`
+-      - dpkg-dev
+-    override-pull: |
+-      mkdir -p /tmp/llvm
+-      cd /tmp/llvm
+-      apt-get source -y llvm-toolchain-19
+-      cp -r llvm-toolchain-19-*/. $CRAFT_PART_SRC
+-    override-build: |
+-      apt-get build-dep -y llvm-toolchain-19
+-
+-      mkdir -p llvm/build
+-      cd llvm/build
+-
+-      cmake .. -G "Ninja" \
+-          -DLLVM_TARGETS_TO_BUILD="BPF" \
+-          -DLLVM_ENABLE_PROJECTS="clang" \
+-          -DBUILD_SHARED_LIBS="OFF" \
+-          -DCMAKE_CXX_FLAGS="-s -O2" \
+-          -DCMAKE_BUILD_TYPE="Release" \
+-          -DLLVM_BUILD_RUNTIME="OFF" \
+-          -DCMAKE_INSTALL_PREFIX="/usr/local"
+-
+-      ninja clang llc llvm-objcopy llvm-strip
+-
+-      strip bin/clang
+-      strip bin/llc
+-      strip bin/llvm-objcopy
+-      strip bin/llvm-strip
+-
+-      mkdir -p $CRAFT_PART_INSTALL/usr/local/bin
+-      cp bin/clang bin/llc bin/llvm-objcopy bin/llvm-strip $CRAFT_PART_INSTALL/usr/local/bin/
++    stage-packages:
++      - clang-19
++      - llvm-19
++    override-prime: |
++      craftctl default
++      mkdir -p $CRAFT_PRIME/usr/local/bin
++      for t in clang llc llvm-objcopy llvm-strip; do
++        ln -sf /usr/lib/llvm-19/bin/$t $CRAFT_PRIME/usr/local/bin/$t
++      done

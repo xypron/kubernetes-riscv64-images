@@ -1,0 +1,26 @@
+diff --git a/1.14.7/rockcraft.yaml b/1.14.7/rockcraft.yaml
+index a0107d6..14d3b02 100644
+--- a/1.14.7/rockcraft.yaml
++++ b/1.14.7/rockcraft.yaml
+@@ -9,6 +9,7 @@ build-base: ubuntu@24.04
+ platforms:
+   amd64:
+   arm64:
++  riscv64:
+ 
+ entrypoint-service: coredns
+ services:
+@@ -42,8 +43,12 @@ parts:
+   openssl:
+     plugin: nil
+     stage-packages:
+-      - openssl-fips-module-3 # a Pro only FIPS package for openssl
+       - openssl # now automatically selected from fips-preview
++      # A Pro only FIPS package for openssl. The Ubuntu Pro fips-updates
++      # archive does not provide it for riscv64.
++      - on riscv64: []
++      - else:
++          - openssl-fips-module-3
+   coredns:
+     after: [pebble]
+     plugin: nil

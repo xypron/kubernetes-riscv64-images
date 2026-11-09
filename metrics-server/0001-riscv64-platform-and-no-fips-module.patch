@@ -1,0 +1,31 @@
+diff --git a/0.9.0/rockcraft.yaml b/0.9.0/rockcraft.yaml
+index 59bb810..034862b 100644
+--- a/0.9.0/rockcraft.yaml
++++ b/0.9.0/rockcraft.yaml
+@@ -11,6 +11,7 @@ build-base: ubuntu@22.04
+ platforms:
+   amd64:
+   arm64:
++  riscv64:
+ 
+ services:
+   metrics-server:
+@@ -26,8 +27,12 @@ parts:
+   openssl:
+     plugin: nil
+     stage-packages:
+-      - openssl-fips-module-3 # a Pro only FIPS package for openssl
+       - openssl # now automatically selected from fips-preview
++      # A Pro only FIPS package for openssl. The Ubuntu Pro fips-updates
++      # archive does not provide it for riscv64.
++      - on riscv64: []
++      - else:
++          - openssl-fips-module-3
+   metrics-server:
+     plugin: nil
+     source: https://github.com/kubernetes-sigs/metrics-server.git
+@@ -47,4 +52,3 @@ parts:
+       make build ARCH="${CRAFT_ARCH_BUILD_FOR}" BINARY_NAME=metrics-server
+       ls $CRAFT_PART_BUILD/_output
+       cp $CRAFT_PART_BUILD/_output/metrics-server $CRAFT_PART_INSTALL
+-      snap refresh go --channel 1.25-fips/stable

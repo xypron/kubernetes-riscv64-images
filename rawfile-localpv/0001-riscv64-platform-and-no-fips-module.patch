@@ -1,0 +1,26 @@
+diff --git a/rockcraft.yaml b/rockcraft.yaml
+index d24cbdd..5acab18 100644
+--- a/rockcraft.yaml
++++ b/rockcraft.yaml
+@@ -25,6 +25,7 @@ build-base: ubuntu@22.04
+ platforms:
+   amd64:
+   arm64:
++  riscv64:
+ 
+ services:
+   rawfile:
+@@ -55,8 +56,12 @@ parts:
+   openssl:
+     plugin: nil
+     stage-packages:
+-      - openssl-fips-module-3 # a Pro only FIPS package for openssl
+       - openssl # now automatically selected from fips-preview
++      # A Pro only FIPS package for openssl. The Ubuntu Pro fips-updates
++      # archive does not provide it for riscv64.
++      - on riscv64: []
++      - else:
++          - openssl-fips-module-3
+   rawfile-deps:
+     after: [btrfsutil]
+     plugin: python

@@ -1,0 +1,136 @@
+diff --git a/frr-k8s/v0.0.25/rockcraft.yaml b/frr-k8s/v0.0.25/rockcraft.yaml
+index 5297e2a..a508d55 100644
+--- a/frr-k8s/v0.0.25/rockcraft.yaml
++++ b/frr-k8s/v0.0.25/rockcraft.yaml
+@@ -11,6 +11,7 @@ build-base: ubuntu@22.04
+ platforms:
+   amd64:
+   arm64:
++  riscv64:
+ 
+ entrypoint-service: frr-k8s
+ services:
+@@ -23,7 +24,10 @@ parts:
+   openssl:
+     plugin: nil
+     stage-packages:
+-      - openssl-fips-module-3
++      # Ubuntu Pro only; the fips-updates archive has no riscv64.
++      - on riscv64: []
++      - else:
++          - openssl-fips-module-3
+       - openssl
+ 
+   # The frr-k8s chart init containers run `/bin/sh -c "cp -f ..."`
+@@ -43,7 +47,12 @@ parts:
+     source-tag: v0.0.25
+     source-depth: 1
+     override-build: |
+-      snap refresh go --channel 1.25-fips/stable
++      # The 1.25-fips channel does not exist on riscv64.
++      GO_CHANNEL=1.25-fips/stable
++      if [ "$CRAFT_ARCH_BUILD_FOR" = "riscv64" ]; then
++        GO_CHANNEL=1.26-fips/stable
++      fi
++      snap refresh go --channel "$GO_CHANNEL"
+ 
+       GIT_COMMIT=`git rev-parse HEAD`
+       # We'll use the tag name.
+diff --git a/frr/10.4.3/rockcraft.yaml b/frr/10.4.3/rockcraft.yaml
+index c68522c..0b16a42 100644
+--- a/frr/10.4.3/rockcraft.yaml
++++ b/frr/10.4.3/rockcraft.yaml
+@@ -11,6 +11,7 @@ build-base: ubuntu@22.04
+ platforms:
+   amd64:
+   arm64:
++  riscv64:
+ 
+ entrypoint-service: frr
+ services:
+@@ -164,5 +165,8 @@ parts:
+       - python3
+       # The frr-k8s chart copies its FIPS-built frr-metrics and frr-status
+       # binaries into this image, so the OpenSSL FIPS provider must be here.
+-      - openssl-fips-module-3
++      # Ubuntu Pro only; the fips-updates archive has no riscv64.
++      - on riscv64: []
++      - else:
++          - openssl-fips-module-3
+       - openssl
+diff --git a/metallb/v0.16.1/controller/rockcraft.yaml b/metallb/v0.16.1/controller/rockcraft.yaml
+index 21f5152..66b6e10 100644
+--- a/metallb/v0.16.1/controller/rockcraft.yaml
++++ b/metallb/v0.16.1/controller/rockcraft.yaml
+@@ -11,6 +11,7 @@ build-base: ubuntu@22.04
+ platforms:
+   amd64:
+   arm64:
++  riscv64:
+ 
+ entrypoint-service: controller
+ services:
+@@ -23,7 +24,10 @@ parts:
+   openssl:
+     plugin: nil
+     stage-packages:
+-      - openssl-fips-module-3
++      # Ubuntu Pro only; the fips-updates archive has no riscv64.
++      - on riscv64: []
++      - else:
++          - openssl-fips-module-3
+       - openssl
+ 
+   controller:
+@@ -35,7 +39,12 @@ parts:
+     source-tag: v0.16.1
+     source-depth: 1
+     override-build: |
+-      snap refresh go --channel 1.25-fips/stable
++      # The 1.25-fips channel does not exist on riscv64.
++      GO_CHANNEL=1.25-fips/stable
++      if [ "$CRAFT_ARCH_BUILD_FOR" = "riscv64" ]; then
++        GO_CHANNEL=1.26-fips/stable
++      fi
++      snap refresh go --channel "$GO_CHANNEL"
+ 
+       GIT_COMMIT=`git rev-parse HEAD`
+       # We'll use the tag name.
+diff --git a/metallb/v0.16.1/speaker/rockcraft.yaml b/metallb/v0.16.1/speaker/rockcraft.yaml
+index 10b6a31..5f5d5c9 100644
+--- a/metallb/v0.16.1/speaker/rockcraft.yaml
++++ b/metallb/v0.16.1/speaker/rockcraft.yaml
+@@ -11,6 +11,7 @@ build-base: ubuntu@22.04
+ platforms:
+   amd64:
+   arm64:
++  riscv64:
+ 
+ entrypoint-service: speaker
+ services:
+@@ -23,7 +24,10 @@ parts:
+   openssl:
+     plugin: nil
+     stage-packages:
+-      - openssl-fips-module-3 # a Pro only FIPS package for openssl
++      # Ubuntu Pro only; the fips-updates archive has no riscv64.
++      - on riscv64: []
++      - else:
++          - openssl-fips-module-3
+       - openssl # now automatically selected from fips-preview
+ 
+   speaker:
+@@ -35,7 +39,12 @@ parts:
+     source-tag: v0.16.1
+     source-depth: 1
+     override-build: |
+-      snap refresh go --channel 1.25-fips/stable
++      # The 1.25-fips channel does not exist on riscv64.
++      GO_CHANNEL=1.25-fips/stable
++      if [ "$CRAFT_ARCH_BUILD_FOR" = "riscv64" ]; then
++        GO_CHANNEL=1.26-fips/stable
++      fi
++      snap refresh go --channel "$GO_CHANNEL"
+ 
+       GIT_COMMIT=`git rev-parse HEAD`
+       # We'll use the tag name.

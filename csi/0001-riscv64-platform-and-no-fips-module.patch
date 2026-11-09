@@ -1,0 +1,124 @@
+diff --git a/csi-node-driver-registrar/2.17.0/rockcraft.yaml b/csi-node-driver-registrar/2.17.0/rockcraft.yaml
+index 5e026b4..48def58 100644
+--- a/csi-node-driver-registrar/2.17.0/rockcraft.yaml
++++ b/csi-node-driver-registrar/2.17.0/rockcraft.yaml
+@@ -23,6 +23,7 @@ build-base: ubuntu@24.04
+ platforms:
+   amd64:
+   arm64:
++  riscv64:
+ 
+ environment:
+   APP_VERSION: 2.17.0
+@@ -59,11 +60,17 @@ parts:
+   openssl:
+     plugin: nil
+     stage-packages:
+-      - openssl-fips-module-3 # a Pro only FIPS package for openssl
+       - openssl # now automatically selected from fips-preview
++      # A Pro only FIPS package for openssl. The Ubuntu Pro fips-updates
++      # archive does not provide it for riscv64.
++      - on riscv64: []
++      - else:
++          - openssl-fips-module-3
+   csi-node-driver-registrar:
+     after: [pebble]
+     plugin: go
++    build-snaps:
++      - go/1.26-fips/stable
+     source-type: git
+     source: https://github.com/kubernetes-csi/node-driver-registrar.git
+     source-tag: v${CRAFT_PROJECT_VERSION}
+diff --git a/csi-provisioner/6.3.0/rockcraft.yaml b/csi-provisioner/6.3.0/rockcraft.yaml
+index 263d985..e51a367 100644
+--- a/csi-provisioner/6.3.0/rockcraft.yaml
++++ b/csi-provisioner/6.3.0/rockcraft.yaml
+@@ -20,6 +20,7 @@ build-base: ubuntu@24.04
+ platforms:
+   amd64:
+   arm64:
++  riscv64:
+ 
+ environment:
+   APP_VERSION: 6.3.0
+@@ -56,11 +57,17 @@ parts:
+   openssl:
+     plugin: nil
+     stage-packages:
+-      - openssl-fips-module-3 # a Pro only FIPS package for openssl
+       - openssl # now automatically selected from fips-preview
++      # A Pro only FIPS package for openssl. The Ubuntu Pro fips-updates
++      # archive does not provide it for riscv64.
++      - on riscv64: []
++      - else:
++          - openssl-fips-module-3
+   csi-provisioner:
+     after: [pebble]
+     plugin: go
++    build-snaps:
++      - go/1.26-fips/stable
+     source: https://github.com/kubernetes-csi/external-provisioner.git
+     source-type: git
+     source-tag: v${CRAFT_PROJECT_VERSION}
+diff --git a/csi-resizer/2.2.1/rockcraft.yaml b/csi-resizer/2.2.1/rockcraft.yaml
+index ea4f8e2..96e6ee3 100644
+--- a/csi-resizer/2.2.1/rockcraft.yaml
++++ b/csi-resizer/2.2.1/rockcraft.yaml
+@@ -20,6 +20,7 @@ build-base: ubuntu@24.04
+ platforms:
+   amd64:
+   arm64:
++  riscv64:
+ 
+ environment:
+   APP_VERSION: 2.2.1
+@@ -56,11 +57,17 @@ parts:
+   openssl:
+     plugin: nil
+     stage-packages:
+-      - openssl-fips-module-3 # a Pro only FIPS package for openssl
+       - openssl # now automatically selected from fips-preview
++      # A Pro only FIPS package for openssl. The Ubuntu Pro fips-updates
++      # archive does not provide it for riscv64.
++      - on riscv64: []
++      - else:
++          - openssl-fips-module-3
+   csi-resizer:
+     after: [pebble]
+     plugin: go
++    build-snaps:
++      - go/1.26-fips/stable
+     source: https://github.com/kubernetes-csi/external-resizer.git
+     source-type: git
+     source-tag: v${CRAFT_PROJECT_VERSION}
+diff --git a/csi-snapshotter/8.6.0/rockcraft.yaml b/csi-snapshotter/8.6.0/rockcraft.yaml
+index eec661c..e21bf6b 100644
+--- a/csi-snapshotter/8.6.0/rockcraft.yaml
++++ b/csi-snapshotter/8.6.0/rockcraft.yaml
+@@ -15,6 +15,7 @@ build-base: ubuntu@24.04
+ platforms:
+   amd64:
+   arm64:
++  riscv64:
+ 
+ environment:
+   APP_VERSION: 8.6.0
+@@ -51,11 +52,17 @@ parts:
+   openssl:
+     plugin: nil
+     stage-packages:
+-      - openssl-fips-module-3 # a Pro only FIPS package for openssl
+       - openssl # now automatically selected from fips-preview
++      # A Pro only FIPS package for openssl. The Ubuntu Pro fips-updates
++      # archive does not provide it for riscv64.
++      - on riscv64: []
++      - else:
++          - openssl-fips-module-3
+   csi-snapshotter:
+     after: [pebble]
+     plugin: go
++    build-snaps:
++      - go/1.26-fips/stable
+     source: https://github.com/kubernetes-csi/external-snapshotter.git
+     source-type: git
+     source-tag: v${CRAFT_PROJECT_VERSION}

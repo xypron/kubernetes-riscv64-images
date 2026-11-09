@@ -1,0 +1,19 @@
+diff --git a/rockcraft.yaml b/rockcraft.yaml
+--- a/rockcraft.yaml
++++ b/rockcraft.yaml
+@@ -68,10 +68,15 @@
+     source: .
+     build-environment:
+       - PIP_NO_CACHE_DIR: "1"
++      # setup.py only adds -latomic when 64 bit atomics need it. riscv64
++      # also needs it for the 1 and 2 byte atomics (__atomic_exchange_1).
++      - GRPC_PYTHON_LDFLAGS: "-lpthread -latomic -static-libgcc"
+     python-requirements:
+       - $CRAFT_STAGE/wheels/wheels.txt
+       - ./requirements.txt
+     stage-packages:
++      # runtime library for cygrpc.so, linked with -latomic above
++      - libatomic1
+       - e2fsprogs
+       - btrfs-progs
+       - libbtrfsutil1
