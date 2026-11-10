@@ -1,0 +1,8 @@
+# Options for building on riscv64. Used by build.sh via
+# BAZEL_BUILD_OPTS=--bazelrc=<this file> (see build.sh).
+
+# There are no remote JDKs for riscv64, run on the installed JDK 21
+# (the local JDK also provides compile toolchains for language level 11).
+build --java_runtime_version=21
+build --tool_java_runtime_version=21
+build --extra_toolchains=//bazel/java:all

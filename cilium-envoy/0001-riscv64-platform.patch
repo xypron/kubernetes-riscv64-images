@@ -1,0 +1,492 @@
+diff --git a/WORKSPACE b/WORKSPACE
+index 8399bc62..16a54adb 100644
+--- a/WORKSPACE
++++ b/WORKSPACE
+@@ -46,6 +46,9 @@ git_repository(
+         "@//patches:0007-config-add-grpc-mux-stream-event-callback.patch",
+         "@//patches:0008-repo-Make-yq-dependency-optional-for-CI-config-parsi.patch",
+         "@//patches:0009-test-use-bazel_tools-runfiles-to-locate-benchmark-bi.patch",
++        "@//patches:0010-aspect-bazel-lib-riscv64.patch",
++        "@//patches:0011-rules-python-riscv64.patch",
++        "@//patches:0012-pip-use-system-python.patch",
+     ],
+     # // clang-format off: Envoy's format check: Only repository_locations.bzl may contains URL references
+     remote = "https://github.com/envoyproxy/envoy.git",
+@@ -134,9 +137,12 @@ load("@envoy//bazel:repo.bzl", "envoy_repo")
+ 
+ envoy_repo()
+ 
+-load("@envoy//bazel:toolchains.bzl", "envoy_toolchains")
++# riscv64: toolchains_llvm (envoy_toolchains) does not know linux-riscv64.
++# The clang toolchain from //bazel/toolchains is used instead, so provide
++# an empty @llvm_toolchain.
++load("//bazel:local_llvm.bzl", "riscv64_stub_llvm_toolchain")
+ 
+-envoy_toolchains()
++riscv64_stub_llvm_toolchain(name = "llvm_toolchain")
+ 
+ # When BAZEL_LLVM_PATH is set, envoy_toolchains() skips creating the
+ # llvm_toolchain_llvm repo, but envoy's clang-format target still depends on it.
+diff --git a/bazel/BUILD b/bazel/BUILD
+index 969fc199..13f1d349 100644
+--- a/bazel/BUILD
++++ b/bazel/BUILD
+@@ -18,6 +18,15 @@ platform(
+     ],
+ )
+ 
++platform(
++    name = "linux_riscv64",
++    constraint_values = [
++        ":cilium_target_platform_enabled",
++        "@platforms//cpu:riscv64",
++        "@platforms//os:linux",
++    ],
++)
++
+ platform(
+     name = "linux_x86_64",
+     constraint_values = [
+diff --git a/bazel/envoy_dependency_imports.bzl b/bazel/envoy_dependency_imports.bzl
+index 6a25e996..5a2d1fa4 100644
+--- a/bazel/envoy_dependency_imports.bzl
++++ b/bazel/envoy_dependency_imports.bzl
+@@ -93,10 +93,11 @@ def envoy_dependency_imports(
+     register_yq_toolchains(version = yq_version)
+     parser_deps()
+ 
+-    rules_buf_toolchains(**{
+-        "sha256": buf_sha,
+-        "version": buf_version,
+-    })
++    # buf (lint and breaking-change checks only) has no riscv64 release.
++    # rules_buf_toolchains(**{
++    #     "sha256": buf_sha,
++    #     "version": buf_version,
++    # })
+ 
+     setup_sanitizer_libs()
+ 
+@@ -248,10 +249,13 @@ def envoy_download_go_sdks(go_version):
+         version = go_version,
+     )
+ 
++def _riscv64_stub_crates_impl(rctx):
++    rctx.file("BUILD.bazel", "")
++    rctx.file("defs.bzl", "def crate_repositories():\n    pass\n\ndef all_crate_deps(**kwargs):\n    return []\n")
++
++_riscv64_stub_crates = repository_rule(implementation = _riscv64_stub_crates_impl)
++
+ def crates_repositories():
+-    crates_repository(
+-        name = "dynamic_modules_rust_sdk_crate_index",
+-        cargo_lockfile = "@envoy//source/extensions/dynamic_modules/sdk/rust:Cargo.lock",
+-        lockfile = Label("@//bazel:envoy_dynamic_modules_rust_sdk.Cargo.Bazel.lock"),
+-        manifests = ["@envoy//source/extensions/dynamic_modules/sdk/rust:Cargo.toml"],
+-    )
++    # crate_universe (cargo-bazel) does not support riscv64 hosts. Only
++    # Envoy's Rust dynamic modules SDK uses this index, so stub it out.
++    _riscv64_stub_crates(name = "dynamic_modules_rust_sdk_crate_index")
+diff --git a/bazel/java/BUILD b/bazel/java/BUILD
+new file mode 100644
+index 00000000..4ccf0bf5
+--- /dev/null
++++ b/bazel/java/BUILD
+@@ -0,0 +1,24 @@
++load("@local_config_platform//:constraints.bzl", "HOST_CONSTRAINTS")
++
++# riscv64: there are no remote JDKs. rules_java hard-codes a runtime alias
++# that asks for java_runtime_version=remotejdk_21, so let that request
++# resolve to the local JDK.
++config_setting(
++    name = "remotejdk_21_setting",
++    values = {"java_runtime_version": "remotejdk_21"},
++)
++
++toolchain(
++    name = "remotejdk_21_runtime",
++    target_compatible_with = HOST_CONSTRAINTS,
++    target_settings = [":remotejdk_21_setting"],
++    toolchain = "@local_jdk//:jdk",
++    toolchain_type = "@bazel_tools//tools/jdk:runtime_toolchain_type",
++)
++
++toolchain(
++    name = "remotejdk_21_bootstrap_runtime",
++    target_settings = [":remotejdk_21_setting"],
++    toolchain = "@local_jdk//:jdk",
++    toolchain_type = "@bazel_tools//tools/jdk:bootstrap_runtime_toolchain_type",
++)
+diff --git a/bazel/local_llvm.bzl b/bazel/local_llvm.bzl
+index ede117a5..0af95186 100644
+--- a/bazel/local_llvm.bzl
++++ b/bazel/local_llvm.bzl
+@@ -36,3 +36,11 @@ local_llvm_repo = repository_rule(
+     environ = ["BAZEL_LLVM_PATH", "PATH"],
+     local = True,
+ )
++
++def _riscv64_stub_llvm_toolchain_impl(repository_ctx):
++    repository_ctx.file("BUILD.bazel", "")
++    repository_ctx.file("toolchains.bzl", "def llvm_register_toolchains():\n    pass\n")
++
++riscv64_stub_llvm_toolchain = repository_rule(
++    implementation = _riscv64_stub_llvm_toolchain_impl,
++)
+diff --git a/bazel/platform_mappings b/bazel/platform_mappings
+index 46c5307b..a6e2ad37 100644
+--- a/bazel/platform_mappings
++++ b/bazel/platform_mappings
+@@ -7,6 +7,10 @@ platforms:
+     --cpu=k8
+     --crosstool_top=//bazel/toolchains:toolchain
+ 
++  //bazel:linux_riscv64
++    --cpu=riscv64
++    --crosstool_top=//bazel/toolchains:toolchain
++
+ flags:
+   --cpu=k8
+     //bazel:linux_x86_64
+@@ -14,3 +18,5 @@ flags:
+   --cpu=aarch64
+     //bazel:linux_aarch64
+ 
++  --cpu=riscv64
++    //bazel:linux_riscv64
+diff --git a/bazel/toolchains/BUILD b/bazel/toolchains/BUILD
+index 1e626a38..b734c985 100644
+--- a/bazel/toolchains/BUILD
++++ b/bazel/toolchains/BUILD
+@@ -126,6 +126,120 @@ cc_toolchain_config(
+     # builtin_sysroot = "/sysroot",
+ )
+ 
++toolchain(
++    name = "riscv64_linux_cc_toolchain",
++    exec_compatible_with = ["@platforms//os:linux"],
++    target_compatible_with = [
++        "@platforms//cpu:riscv64",
++        "@platforms//os:linux",
++    ],
++    toolchain = ":clang_riscv64_linux_cc_toolchain",
++    toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
++)
++
++cc_toolchain(
++    name = "clang_riscv64_linux_cc_toolchain",
++    all_files = ":empty",
++    compiler_files = ":empty",
++    dwp_files = ":empty",
++    linker_files = ":empty",
++    objcopy_files = ":empty",
++    strip_files = ":empty",
++    toolchain_config = ":clang_riscv64_linux_toolchain_config",
++)
++
++cc_toolchain_config(
++    name = "clang_riscv64_linux_toolchain_config",
++    abi_libc_version = "riscv64",
++    abi_version = "riscv64",
++    compile_flags = [
++        "--target=riscv64-unknown-linux-gnu",
++        "-fuse-ld=lld",  # cmake compiler test needs this
++        "-U_FORTIFY_SOURCE",
++        "-fstack-protector",
++        "-Wall",
++        "-Wunused-but-set-parameter",
++        "-Wthread-safety-analysis",
++        "-Wno-free-nonheap-object",
++        "-fno-omit-frame-pointer",
++        # Needed by Envoy dependencies to build:
++        "-Wno-unused-command-line-argument",  # tcmalloc needs this since -fuse-ld was added above
++        "-Wno-deprecated-builtins",
++    ],
++    compiler = "clang",
++    coverage_compile_flags = ["--coverage"],
++    coverage_link_flags = ["--coverage"],
++    cpu = "riscv64",
++    cxx_builtin_include_directories = [
++        "/usr/lib/llvm-18",
++        "/usr/lib/clang",
++        "/usr/riscv64-linux-gnu/include",
++        "/usr/include",
++    ],
++    cxx_flags = ["-std=c++0x"],
++    dbg_compile_flags = ["-g"],
++    # Cross-compilation flags exported as environment variables for foreign_cc
++    # rules (e.g. liburing's configure_make). This ensures foreign build systems
++    # see the correct --target when they use CFLAGS/CPPFLAGS from the environment.
++    foreign_cc_env = {
++        "CFLAGS": "--target=riscv64-unknown-linux-gnu -fuse-ld=lld",
++        "CPPFLAGS": "--target=riscv64-unknown-linux-gnu -fuse-ld=lld",
++        # -lc is needed because liburing builds a shared library with -Wl,-z,defs
++        # which requires all symbols (including memset from libc) to be resolved.
++        # The cross-compiler driver doesn't implicitly add -lc for shared libraries.
++        "LDFLAGS": "--target=riscv64-unknown-linux-gnu -fuse-ld=lld -lc",
++    },
++    host_system_name = "local",
++    link_flags = [
++        "--target=riscv64-unknown-linux-gnu",
++        "-fuse-ld=lld",
++        "-Wl,-no-as-needed",
++        "-Wl,-z,relro,-z,now",
++        "-lm",
++    ],
++    link_libs = [
++        "-l:libstdc++.a",
++        "-latomic",
++    ],
++    opt_compile_flags = [
++        "-g0",
++        "-O2",
++        "-D_FORTIFY_SOURCE=1",
++        "-DNDEBUG",
++        "-ffunction-sections",
++        "-fdata-sections",
++    ],
++    opt_link_flags = ["-Wl,--gc-sections"],
++    supports_start_end_lib = True,
++    target_libc = "glibc",
++    target_system_name = "riscv64-linux-gnu",
++    tool_paths = {
++        "ar": "/usr/lib/llvm-18/bin/llvm-ar",
++        "compat-ld": "/usr/lib/llvm-18/bin/lld",
++        "ld": "/usr/lib/llvm-18/bin/lld",
++        "gold": "/usr/lib/llvm-18/bin/lld",
++        "cpp": "/usr/lib/llvm-18/bin/clang-cpp",
++        "gcc": "/usr/lib/llvm-18/bin/clang",
++        "dwp": "/usr/lib/llvm-18/bin/llvm-dwp",
++        "gcov": "/usr/lib/llvm-18/bin/llvm-cov",
++        "nm": "/usr/lib/llvm-18/bin/llvm-nm",
++        "objcopy": "/usr/lib/llvm-18/bin/llvm-objcopy",
++        "objdump": "/usr/lib/llvm-18/bin/llvm-objdump",
++        "strip": "/usr/lib/llvm-18/bin/llvm-strip",
++    },
++    toolchain_identifier = "linux_riscv64",
++    unfiltered_compile_flags = [
++        "-Wno-builtin-macro-redefined",
++        "-D__DATE__=\"redacted\"",
++        "-D__TIMESTAMP__=\"redacted\"",
++        "-D__TIME__=\"redacted\"",
++    ],
++    #
++    # cxx_builtin_include_directories entries need "" prefix if sysroot is set
++    #
++    # builtin_sysroot = "/sysroot",
++)
++
+ toolchain(
+     name = "x86_64_linux_cc_toolchain",
+     exec_compatible_with = ["@platforms//os:linux"],
+diff --git a/patches/0010-aspect-bazel-lib-riscv64.patch b/patches/0010-aspect-bazel-lib-riscv64.patch
+new file mode 100644
+index 00000000..cbe3bfd9
+--- /dev/null
++++ b/patches/0010-aspect-bazel-lib-riscv64.patch
+@@ -0,0 +1,84 @@
++diff --git a/bazel/aspect-riscv64.patch b/bazel/aspect-riscv64.patch
++new file mode 100644
++index 0000000..52edbb8
++--- /dev/null
+++++ b/bazel/aspect-riscv64.patch
++@@ -0,0 +1,65 @@
+++diff --git a/lib/private/jq_toolchain.bzl b/lib/private/jq_toolchain.bzl
+++--- a/lib/private/jq_toolchain.bzl
++++++ b/lib/private/jq_toolchain.bzl
+++@@ -4,6 +4,13 @@
+++ 
+++ # Platform names follow the platform naming convention in @aspect_bazel_lib//:lib/private/repo_utils.bzl
+++ JQ_PLATFORMS = {
++++    "linux_riscv64": struct(
++++        release_platform = "linux-riscv64",
++++        compatible_with = [
++++            "@platforms//os:linux",
++++            "@platforms//cpu:riscv64",
++++        ],
++++    ),
+++     "darwin_amd64": struct(
+++         release_platform = "macos-amd64",
+++         compatible_with = [
+++@@ -165,6 +172,15 @@
+++ )
+++ 
+++ def _jq_platform_repo_impl(rctx):
++++    if rctx.attr.platform == "linux_riscv64":
++++        # No upstream riscv64 binary: use a locally built one.
++++        rctx.symlink(rctx.getenv("JQ_RISCV64_BIN", "/usr/bin/jq"), "jq")
++++        rctx.file("BUILD.bazel", """# @generated by @aspect_bazel_lib//lib/private:jq_toolchain.bzl
++++load("@aspect_bazel_lib//lib/private:jq_toolchain.bzl", "jq_toolchain")
++++exports_files(["jq"])
++++jq_toolchain(name = "jq_toolchain", bin = "jq", visibility = ["//visibility:public"])
++++""")
++++        return
+++     is_windows = rctx.attr.platform.startswith("windows_")
+++     meta = JQ_PLATFORMS[rctx.attr.platform]
+++     release_platform = meta.release_platform if hasattr(meta, "release_platform") else rctx.attr.platform
+++diff --git a/lib/private/yq_toolchain.bzl b/lib/private/yq_toolchain.bzl
+++--- a/lib/private/yq_toolchain.bzl
++++++ b/lib/private/yq_toolchain.bzl
+++@@ -4,6 +4,12 @@
+++ 
+++ # Platform names follow the platform naming convention in @aspect_bazel_lib//:lib/private/repo_utils.bzl
+++ YQ_PLATFORMS = {
++++    "linux_riscv64": struct(
++++        compatible_with = [
++++            "@platforms//os:linux",
++++            "@platforms//cpu:riscv64",
++++        ],
++++    ),
+++     "darwin_amd64": struct(
+++         compatible_with = [
+++             "@platforms//os:macos",
+++@@ -414,6 +420,15 @@
+++ )
+++ 
+++ def _yq_platform_repo_impl(rctx):
++++    if rctx.attr.platform == "linux_riscv64":
++++        # No upstream riscv64 binary: use a locally built one.
++++        rctx.symlink(rctx.getenv("YQ_RISCV64_BIN", "/home/llm/tools/yq"), "yq")
++++        rctx.file("BUILD.bazel", """# @generated by @aspect_bazel_lib//lib/private:yq_toolchain.bzl
++++load("@aspect_bazel_lib//lib/private:yq_toolchain.bzl", "yq_toolchain")
++++exports_files(["yq"])
++++yq_toolchain(name = "yq_toolchain", bin = "yq", visibility = ["//visibility:public"])
++++""")
++++        return
+++     is_windows = rctx.attr.platform.startswith("windows_")
+++     meta = YQ_PLATFORMS[rctx.attr.platform]
+++     release_platform = meta.release_platform if hasattr(meta, "release_platform") else rctx.attr.platform
++diff --git a/bazel/repositories.bzl b/bazel/repositories.bzl
++index a7c5f72..853cb41 100644
++--- a/bazel/repositories.bzl
+++++ b/bazel/repositories.bzl
++@@ -227,7 +227,7 @@ def envoy_dependencies(skip_targets = []):
++     external_http_archive(
++         "aspect_bazel_lib",
++         patch_args = ["-p1"],
++-        patches = ["@envoy//bazel:aspect.patch"],
+++        patches = ["@envoy//bazel:aspect.patch", "@envoy//bazel:aspect-riscv64.patch"],
++     )
++ 
++     _com_github_fdio_vpp_vcl()
+diff --git a/patches/0011-rules-python-riscv64.patch b/patches/0011-rules-python-riscv64.patch
+new file mode 100644
+index 00000000..ff956764
+--- /dev/null
++++ b/patches/0011-rules-python-riscv64.patch
+@@ -0,0 +1,29 @@
++diff --git a/bazel/repositories.bzl b/bazel/repositories.bzl
++index 853cb41..4e975be 100644
++--- a/bazel/repositories.bzl
+++++ b/bazel/repositories.bzl
++@@ -649,6 +649,8 @@ def _com_google_absl():
++ def _com_google_protobuf():
++     external_http_archive(
++         name = "rules_python",
+++        patch_args = ["-p1"],
+++        patches = ["@envoy//bazel:rules_python-riscv64.patch"],
++     )
++     external_http_archive(
++         name = "rules_java",
++diff --git a/bazel/rules_python-riscv64.patch b/bazel/rules_python-riscv64.patch
++new file mode 100644
++index 0000000..fcbd755
++--- /dev/null
+++++ b/bazel/rules_python-riscv64.patch
++@@ -0,0 +1,10 @@
+++--- a/python/private/pypi/pip_repository.bzl
++++++ b/python/private/pypi/pip_repository.bzl
+++@@ -96,6 +96,7 @@
+++                 "linux_aarch64",
+++                 "linux_arm",
+++                 "linux_ppc",
++++                "linux_riscv64",
+++                 "linux_s390x",
+++                 "linux_x86_64",
+++                 "osx_aarch64",
+diff --git a/patches/0012-pip-use-system-python.patch b/patches/0012-pip-use-system-python.patch
+new file mode 100644
+index 00000000..c4273f22
+--- /dev/null
++++ b/patches/0012-pip-use-system-python.patch
+@@ -0,0 +1,29 @@
++diff --git a/bazel/python_dependencies.bzl b/bazel/python_dependencies.bzl
++index 9a1f4e5..995dfd4 100644
++--- a/bazel/python_dependencies.bzl
+++++ b/bazel/python_dependencies.bzl
++@@ -7,21 +7,21 @@ def envoy_python_dependencies():
++     load_packages()
++     pip_parse(
++         name = "base_pip3",
++-        python_interpreter_target = "@python3_12_host//:python",
+++        python_interpreter = "python3",
++         requirements_lock = "@envoy//tools/base:requirements.txt",
++         extra_pip_args = ["--require-hashes"],
++     )
++ 
++     pip_parse(
++         name = "dev_pip3",
++-        python_interpreter_target = "@python3_12_host//:python",
+++        python_interpreter = "python3",
++         requirements_lock = "@envoy//tools/dev:requirements.txt",
++         extra_pip_args = ["--require-hashes"],
++     )
++ 
++     pip_parse(
++         name = "fuzzing_pip3",
++-        python_interpreter_target = "@python3_12_host//:python",
+++        python_interpreter = "python3",
++         requirements_lock = "@rules_fuzzing//fuzzing:requirements.txt",
++         extra_pip_args = ["--require-hashes"],
++     )
+diff --git a/proxylib/libcilium.h b/proxylib/libcilium.h
+index 181b3466..7c122532 100644
+--- a/proxylib/libcilium.h
++++ b/proxylib/libcilium.h
+@@ -87,46 +87,9 @@ typedef struct { void *data; GoInt len; GoInt cap; } GoSlice;
+ extern "C" {
+ #endif
+ 
+-
+-// OnNewConnection is used to register a new connection of protocol 'proto'.
+-// Note that the 'origBuf' and replyBuf' type '*[]byte' corresponds to 'InjectBuf' type, but due to
+-// cgo export restrictions we can't use the go type in the prototype.
+-//
+ extern FilterResult OnNewConnection(GoUint64 instanceId, GoString proto, GoUint64 connectionId, GoUint8 ingress, GoUint32 srcId, GoUint32 dstId, GoString srcAddr, GoString dstAddr, GoString policyName, GoSlice* origBuf, GoSlice* replyBuf);
+-
+-// Each connection is assumed to be called from a single thread, so accessing connection metadata
+-// does not need protection.
+-//
+-// OnData gets all the unparsed data the datapath has received so far. The data is provided to the parser
+-// associated with the connection, and the parser is expected to find if the data frame contains enough data
+-// to make a PASS/DROP decision for the whole data frame. Note that the whole data frame need not be received,
+-// if the decision including the length of the data frame in bytes can be determined based on the beginning of
+-// the data frame only (e.g., headers including the length of the data frame). The parser returns a decision
+-// with the number of bytes on which the decision applies. If more data is available, then the parser will be
+-// called again with the remaining data. Parser needs to return MORE if a decision can't be made with
+-// the available data, including the minimum number of additional bytes that is needed before the parser is
+-// called again.
+-//
+-// The parser can also inject at arbitrary points in the data stream. This is indecated by an INJECT operation
+-// with the number of bytes to be injected. The actual bytes to be injected are provided via an Inject()
+-// callback prior to returning the INJECT operation. The Inject() callback operates on a limited size buffer
+-// provided by the datapath, and multiple INJECT operations may be needed to inject large amounts of data.
+-// Since we get the data on one direction at a time, any frames to be injected in the reverse direction
+-// are placed in the reverse direction buffer, from where the datapath injects the data before calling
+-// us again for the reverse direction input.
+-//
+ extern FilterResult OnData(GoUint64 connectionId, GoUint8 reply, GoUint8 endStream, GoSlice* data, GoSlice* filterOps);
+-
+-// Make this more general connection event callback
+-//
+ extern void Close(GoUint64 connectionId);
+-
+-// OpenModule is called before any other APIs.
+-// Called concurrently by different filter instances.
+-// Returns a library instance ID that must be passed to all other API calls.
+-// Calls with the same parameters will return the same instance.
+-// Zero return value indicates an error.
+-//
+ extern GoUint64 OpenModule(GoSlice params, GoUint8 debug);
+ extern void CloseModule(GoUint64 id);
+ 
