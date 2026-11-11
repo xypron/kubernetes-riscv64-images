@@ -1,4 +1,4 @@
-# cilium-envoy on riscv64 (in progress)
+# cilium-envoy on riscv64
 
 Build host: titan2vm1. Source: github.com/cilium/proxy branch v1.37
 (Envoy 1.37.7), Bazel 7.7.1, clang-18 from the Ubuntu archive.
@@ -50,12 +50,32 @@ plus openjdk-21-jdk-headless, build-essential, zip, unzip for Bazel.
    system python3 (patches/0012).
 10. A stale `bazel cquery` from debugging blocked the server lock
     ("Another command is running"). Kill it by pid.
+11. The bundled pkg-config does not know riscv64 (config.guess):
+    rules_foreign_cc_dependencies(register_built_pkgconfig_toolchain =
+    False) uses /usr/bin/pkg-config.
+12. V8 13.8 BUILD.bazel lists src/codegen/riscv/extension-riscv-inl.h,
+    which does not exist. The Wasm runtimes v8, wamr and wasmtime are
+    commented out in envoy_build_config/extensions_build_config.bzl.
+    The image therefore has no Wasm runtime (the null runtime remains).
+13. rules_foreign_cc bootstraps its own CMake (hour long, and it failed
+    with exit 11): register_built_tools = False uses the installed
+    cmake, ninja and make.
+14. cmake 4.2 rejects libevent's cmake_minimum_required:
+    --action_env=CMAKE_POLICY_VERSION_MINIMUM=3.5 in riscv64.bazelrc.
+15. GCC 15 headers: `<cstdbool> is deprecated` is an error with
+    -Werror: --copt and --host_copt -Wno-error=cpp in riscv64.bazelrc.
 
 ## State
 
-Analysis succeeds (about 54000 targets). Compilation started:
-1042 of 10717 actions done after a few minutes. Open: whatever fails
-in tcmalloc, BoringSSL, QUICHE, V8/Wasm, LuaJIT, ...
+Built on titan2vm1 (6572 actions, 24 GB RAM, many hours):
+
+    cilium-envoy version: 293ab4c1e2b1.../1.37.7/Distribution/RELEASE/BoringSSL
+    ELF 64-bit RISC-V, 49 MB, needs libatomic.so.1
+    sha256 6367734a67fd7e4785bf13ec50f403e2f3ac62510add7d9182707a71724ef731
+
+`--version` runs. Not yet tested: a real Cilium run with envoy.enabled,
+cilium-envoy-starter and cilium-envoy-healthcheck (not built here yet),
+libcilium.so, ingress and gateway.
 
 ## Build
 

@@ -48,10 +48,21 @@ index 969fc199..13f1d349 100644
      name = "linux_x86_64",
      constraint_values = [
 diff --git a/bazel/envoy_dependency_imports.bzl b/bazel/envoy_dependency_imports.bzl
-index 6a25e996..5a2d1fa4 100644
+index 6a25e996..dbdff2ee 100644
 --- a/bazel/envoy_dependency_imports.bzl
 +++ b/bazel/envoy_dependency_imports.bzl
-@@ -93,10 +93,11 @@ def envoy_dependency_imports(
+@@ -50,7 +50,9 @@ def envoy_dependency_imports(
+         buf_sha = BUF_SHA,
+         buf_version = BUF_VERSION):
+     compatibility_proxy_repo()
+-    rules_foreign_cc_dependencies()
++    # riscv64: the bundled pkg-config sources have a config.guess that does
++    # not know riscv64, use the installed pkg-config.
++    rules_foreign_cc_dependencies(register_built_pkgconfig_toolchain = False, register_built_tools = False)
+     go_rules_dependencies()
+     go_register_toolchains(go_version)
+     if go_version != "host":
+@@ -93,10 +95,11 @@ def envoy_dependency_imports(
      register_yq_toolchains(version = yq_version)
      parser_deps()
  
@@ -67,7 +78,7 @@ index 6a25e996..5a2d1fa4 100644
  
      setup_sanitizer_libs()
  
-@@ -248,10 +249,13 @@ def envoy_download_go_sdks(go_version):
+@@ -248,10 +251,13 @@ def envoy_download_go_sdks(go_version):
          version = go_version,
      )
  
@@ -279,6 +290,26 @@ index 1e626a38..b734c985 100644
  toolchain(
      name = "x86_64_linux_cc_toolchain",
      exec_compatible_with = ["@platforms//os:linux"],
+diff --git a/envoy_build_config/extensions_build_config.bzl b/envoy_build_config/extensions_build_config.bzl
+index 79232104..99dfadd6 100644
+--- a/envoy_build_config/extensions_build_config.bzl
++++ b/envoy_build_config/extensions_build_config.bzl
+@@ -396,9 +396,12 @@ EXTENSIONS = {
+     # WebAssembly runtimes
+     #
+     "envoy.wasm.runtime.null": "//source/extensions/wasm_runtime/null:config",
+-    "envoy.wasm.runtime.v8": "//source/extensions/wasm_runtime/v8:config",
+-    "envoy.wasm.runtime.wamr": "//source/extensions/wasm_runtime/wamr:config",
+-    "envoy.wasm.runtime.wasmtime": "//source/extensions/wasm_runtime/wasmtime:config",
++    # riscv64: not built (V8 BUILD lists a missing file, wasmtime needs crate_universe)
++    # "envoy.wasm.runtime.v8": "//source/extensions/wasm_runtime/v8:config",
++    # riscv64: not built (V8 BUILD lists a missing file, wasmtime needs crate_universe)
++    # "envoy.wasm.runtime.wamr": "//source/extensions/wasm_runtime/wamr:config",
++    # riscv64: not built (V8 BUILD lists a missing file, wasmtime needs crate_universe)
++    # "envoy.wasm.runtime.wasmtime": "//source/extensions/wasm_runtime/wasmtime:config",
+ 
+     #
+     # Rate limit descriptors
 diff --git a/patches/0010-aspect-bazel-lib-riscv64.patch b/patches/0010-aspect-bazel-lib-riscv64.patch
 new file mode 100644
 index 00000000..cbe3bfd9
@@ -439,54 +470,3 @@ index 00000000..c4273f22
 +         requirements_lock = "@rules_fuzzing//fuzzing:requirements.txt",
 +         extra_pip_args = ["--require-hashes"],
 +     )
-diff --git a/proxylib/libcilium.h b/proxylib/libcilium.h
-index 181b3466..7c122532 100644
---- a/proxylib/libcilium.h
-+++ b/proxylib/libcilium.h
-@@ -87,46 +87,9 @@ typedef struct { void *data; GoInt len; GoInt cap; } GoSlice;
- extern "C" {
- #endif
- 
--
--// OnNewConnection is used to register a new connection of protocol 'proto'.
--// Note that the 'origBuf' and replyBuf' type '*[]byte' corresponds to 'InjectBuf' type, but due to
--// cgo export restrictions we can't use the go type in the prototype.
--//
- extern FilterResult OnNewConnection(GoUint64 instanceId, GoString proto, GoUint64 connectionId, GoUint8 ingress, GoUint32 srcId, GoUint32 dstId, GoString srcAddr, GoString dstAddr, GoString policyName, GoSlice* origBuf, GoSlice* replyBuf);
--
--// Each connection is assumed to be called from a single thread, so accessing connection metadata
--// does not need protection.
--//
--// OnData gets all the unparsed data the datapath has received so far. The data is provided to the parser
--// associated with the connection, and the parser is expected to find if the data frame contains enough data
--// to make a PASS/DROP decision for the whole data frame. Note that the whole data frame need not be received,
--// if the decision including the length of the data frame in bytes can be determined based on the beginning of
--// the data frame only (e.g., headers including the length of the data frame). The parser returns a decision
--// with the number of bytes on which the decision applies. If more data is available, then the parser will be
--// called again with the remaining data. Parser needs to return MORE if a decision can't be made with
--// the available data, including the minimum number of additional bytes that is needed before the parser is
--// called again.
--//
--// The parser can also inject at arbitrary points in the data stream. This is indecated by an INJECT operation
--// with the number of bytes to be injected. The actual bytes to be injected are provided via an Inject()
--// callback prior to returning the INJECT operation. The Inject() callback operates on a limited size buffer
--// provided by the datapath, and multiple INJECT operations may be needed to inject large amounts of data.
--// Since we get the data on one direction at a time, any frames to be injected in the reverse direction
--// are placed in the reverse direction buffer, from where the datapath injects the data before calling
--// us again for the reverse direction input.
--//
- extern FilterResult OnData(GoUint64 connectionId, GoUint8 reply, GoUint8 endStream, GoSlice* data, GoSlice* filterOps);
--
--// Make this more general connection event callback
--//
- extern void Close(GoUint64 connectionId);
--
--// OpenModule is called before any other APIs.
--// Called concurrently by different filter instances.
--// Returns a library instance ID that must be passed to all other API calls.
--// Calls with the same parameters will return the same instance.
--// Zero return value indicates an error.
--//
- extern GoUint64 OpenModule(GoSlice params, GoUint8 debug);
- extern void CloseModule(GoUint64 id);
- 
