@@ -1,5 +1,5 @@
 diff --git a/1.20.0/cilium/rockcraft.yaml b/1.20.0/cilium/rockcraft.yaml
-index e5d3c7b..47ac8be 100644
+index e5d3c7b..49faa76 100644
 --- a/1.20.0/cilium/rockcraft.yaml
 +++ b/1.20.0/cilium/rockcraft.yaml
 @@ -4,31 +4,10 @@ description: This rock is a drop in replacement for the cilium/cilium image.
@@ -184,7 +184,25 @@ index e5d3c7b..47ac8be 100644
        rm -rf /root/.cache/bazel
  
    builder-img-deps:
-@@ -342,28 +312,12 @@ parts:
+@@ -234,6 +204,9 @@ parts:
+       - libelf-dev
+       - libiberty-dev
+       - libssl-dev
++      # The static libcrypto.a of Ubuntu 26.04 needs the jitter entropy
++      # library.
++      - libjitterentropy3-dev
+       # bpftool only needs the LLVM toolchain (llvm-config/llvm-strip) and clang
+       # to compile, matching upstream image-tools/images/bpftool/Dockerfile. The
+       # debugger/formatter/libc++ packages are unused; in particular lldb-19
+@@ -250,6 +223,7 @@ parts:
+       # libelf requires zstd on Ubuntu 24.04, this hasn't been addressed
+       # in bpftool yet.
+       sed -i 's/-lelf/-lelf -lzstd/g' src/Makefile
++      sed -i 's/-lcrypto/-lcrypto -ljitterentropy/g' src/Makefile
+ 
+       make -C src -j "$(nproc)"
+       strip src/bpftool
+@@ -342,28 +316,12 @@ parts:
    openssl:
      plugin: nil
      stage-packages:
@@ -217,7 +235,7 @@ index e5d3c7b..47ac8be 100644
      plugin: make
      source-type: git
      source: https://github.com/cilium/cilium.git
-@@ -391,8 +345,12 @@ parts:
+@@ -391,8 +349,12 @@ parts:
        # NOTE (mateoflorido): Patch Cilium Makefiles to use FIPS-compatible build flags
        find . -name "Makefile*" -exec sed -i 's/CGO_ENABLED=0/CGO_ENABLED=1/g' {} \;
  
@@ -232,7 +250,7 @@ index e5d3c7b..47ac8be 100644
  
        make install-container-binary
        make install-bash-completion
-@@ -410,37 +368,16 @@ parts:
+@@ -410,37 +372,16 @@ parts:
        craftctl default
        rm -rf /root/.cache/go-build
    
