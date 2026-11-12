@@ -15,6 +15,7 @@ cd "$WORKDIR"
 [ -d cilium-rocks ] || git clone "$REPO"
 cd cilium-rocks
 git fetch --depth 1 origin "$COMMIT" 2>/dev/null || git fetch origin
+git reset -q --hard
 git checkout -q -B riscv64 "$COMMIT"
 git apply "$HERE/0001-riscv64-build.patch"
 
