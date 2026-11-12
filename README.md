@@ -19,7 +19,7 @@ the lxd group. rockcraft needs a tty, so run it under `script`.
 | metallb controller/speaker | metallb/ | running |
 | frr, frr-k8s | metallb/ | built and imported; not started (frr and frr-k8s are for the BGP mode) |
 | rawfile-localpv 0.8.3-ck5 | rawfile-localpv/ | running; grpcio needs libatomic (2h20 first build, 1h15 later) |
-| cilium-envoy | - | later, needs Bazel 7.7.1 |
+| cilium-envoy | cilium/ | built into the cilium rock (part cilium-envoy, Bazel built from source); build running, untested |
 
 The snap pins the image names in its images.txt
 (/snap/k8s/current/images.txt); a rock must carry exactly that

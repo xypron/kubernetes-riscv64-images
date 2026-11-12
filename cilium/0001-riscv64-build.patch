@@ -1,5 +1,5 @@
 diff --git a/1.20.0/cilium/rockcraft.yaml b/1.20.0/cilium/rockcraft.yaml
-index e5d3c7b..92eccdf 100644
+index e5d3c7b..47ac8be 100644
 --- a/1.20.0/cilium/rockcraft.yaml
 +++ b/1.20.0/cilium/rockcraft.yaml
 @@ -4,31 +4,10 @@ description: This rock is a drop in replacement for the cilium/cilium image.
@@ -8,8 +8,8 @@ index e5d3c7b..92eccdf 100644
  
 -base: ubuntu@22.04
 -build-base: ubuntu@22.04
-+base: ubuntu@24.04
-+build-base: ubuntu@24.04
++base: ubuntu@26.04
++build-base: ubuntu@26.04
  platforms:
 -  amd64:
 -  arm64:
@@ -37,49 +37,75 @@ index e5d3c7b..92eccdf 100644
  
  environment:
    HUBBLE_SERVER: "unix:///var/run/cilium/hubble.sock"
-@@ -41,103 +20,6 @@ services:
+@@ -41,101 +20,92 @@ services:
      startup: enabled
  
  parts:
 -  # https://github.com/cilium/proxy/blob/v1.37/Dockerfile.builder#L84-L88
 -  bazelisk:
--    plugin: nil
--    build-packages:
++  # Bazel for riscv64 does not exist as a package. Build it from the
++  # source distribution, see bazel-from-source.sh.
++  bazel:
+     plugin: nil
+     build-packages:
 -      - wget
 -    overlay-script: |
 -      wget https://github.com/bazelbuild/bazelisk/releases/download/v1.29.0/bazelisk-linux-$CRAFT_ARCH_BUILD_FOR
 -      mv bazelisk-linux-$CRAFT_ARCH_BUILD_FOR /usr/bin/bazelisk
 -      chmod +x /usr/bin/bazelisk
 -      ln -sf /usr/bin/bazelisk /usr/bin/bazel
--
--  # https://github.com/cilium/proxy/blob/v1.37/Dockerfile#L17-L24
--  cilium-envoy:
++      - curl
++      - openjdk-21-jdk-headless
++      - build-essential
++      - zip
++      - unzip
++      - python3
++      - patch
++    override-build: |
++      bash $CRAFT_PROJECT_DIR/bazel-from-source.sh
+ 
+   # https://github.com/cilium/proxy/blob/v1.37/Dockerfile#L17-L24
+   cilium-envoy:
 -    after: [bazelisk]
 -    plugin: make
--    source-type: git
--    source: https://github.com/cilium/proxy.git
--    # Cilium v1.20.0 ships cilium-envoy v1.37.5, built from the v1.37 branch.
--    # https://github.com/cilium/cilium/blob/v1.20.0/images/cilium/Dockerfile#L11
++    after: [bazel, build-deps]
++    plugin: nil
+     source-type: git
+     source: https://github.com/cilium/proxy.git
+     # Cilium v1.20.0 ships cilium-envoy v1.37.5, built from the v1.37 branch.
+     # https://github.com/cilium/cilium/blob/v1.20.0/images/cilium/Dockerfile#L11
 -    source-tag: v1.37
--    source-depth: 1
--    build-packages:
--      - autoconf
--      - automake
--      - cmake
--      - coreutils
++    # Pinned to the commit that the riscv64 patch was made for.
++    source-commit: 293ab4c1e2b1fec84de8fc5a2e3017889aaeac4d
+     source-depth: 1
+     build-packages:
+       - autoconf
+       - automake
++      - clang-18
++      - clang-tools-18
+       - cmake
+       - coreutils
 -      - curl
--      - git
--      - libtool
--      - make
--      - ninja-build
--      - patch
--      - patchelf
+       - git
++      - jq
++      - libc++-18-dev
++      - libc++abi-18-dev
+       - libtool
++      - lld-18
++      - llvm-18
+       - make
+       - ninja-build
++      - openjdk-21-jdk-headless
+       - patch
+       - patchelf
 -      - python3
--      - python-is-python3
--      - unzip
--      - virtualenv
++      - pkg-config
+       - python-is-python3
++      - python3
+       - unzip
+       - virtualenv
 -      - wget
--      - zip
+       - zip
 -      - libc6-dev
 -      - gcc
 -      - binutils
@@ -102,15 +128,21 @@ index e5d3c7b..92eccdf 100644
 -      # let clang-18 auto-select the newest GCC installation for the C++
 -      # standard library headers and runtime.
 -      - g++-12
--    override-build: |
++    build-environment:
++      - CGO_ENABLED: "1"
++      - GOTOOLCHAIN: local
++      - PKG_BUILD: "1"
++      - EMAIL: root@localhost
++      - JAVA_HOME: /usr/lib/jvm/java-21-openjdk-riscv64
+     override-build: |
 -      export PKG_BUILD=1
--      export DESTDIR=$CRAFT_PART_INSTALL
+       export DESTDIR=$CRAFT_PART_INSTALL
 -      export EMAIL=root@localhost
 -      # cilium/proxy v1.37 pins the toolchain to /usr/lib/llvm-18 and its
 -      # generated clang.bazelrc records the build-time PATH as the Bazel action
 -      # env, so put the unversioned LLVM tools (shipped by the apt packages
 -      # under /usr/lib/llvm-18/bin) ahead of everything else.
--      export PATH="/usr/lib/llvm-18/bin:$PATH"
+       export PATH="/usr/lib/llvm-18/bin:$PATH"
 -      # Envoy's bazelrc sets `--incompatible_strict_action_env`, so Bazel's cc
 -      # autoconfig resolves the toolchain against a fixed PATH (/usr/local/bin:
 -      # /usr/bin:/bin) that excludes /usr/lib/llvm-18/bin, baking absolute tool
@@ -121,33 +153,47 @@ index e5d3c7b..92eccdf 100644
 -      # creates these unversioned symlinks itself; replicate that here since we
 -      # install via apt. Keep an always-present tool last: the loop's exit
 -      # status is the last iteration's test, and the shell runs under `set -e`.
--      for tool in clang clang++ clang-cpp lld ld.lld clang-format clang-tidy \
--                  run-clang-tidy clang-apply-replacements llvm-ar llvm-nm \
--                  llvm-strip llvm-objcopy llvm-objdump llvm-dwp llvm-cov \
--                  llvm-symbolizer llvm-config; do
--        [ -x "/usr/lib/llvm-18/bin/$tool" ] && ln -sf /usr/lib/llvm-18/bin/$tool /usr/bin/$tool
--      done
--      git am --ignore-whitespace $CRAFT_PROJECT_DIR/envoy-fixes.patch
--
--      make -C proxylib all
--      mkdir -p $CRAFT_PART_INSTALL/usr/lib/
--      cp proxylib/libcilium.so $CRAFT_PART_INSTALL/usr/lib/
--      cp proxylib/libcilium.so /usr/lib/
--      git rev-parse HEAD >SOURCE_VERSION
++
++      # Upstream v1.37's Dockerfile.builder creates unversioned symlinks to
++      # the LLVM tools, the apt packages only provide /usr/bin/<tool>-18.
+       for tool in clang clang++ clang-cpp lld ld.lld clang-format clang-tidy \
+                   run-clang-tidy clang-apply-replacements llvm-ar llvm-nm \
+                   llvm-strip llvm-objcopy llvm-objdump llvm-dwp llvm-cov \
+                   llvm-symbolizer llvm-config; do
+         [ -x "/usr/lib/llvm-18/bin/$tool" ] && ln -sf /usr/lib/llvm-18/bin/$tool /usr/bin/$tool
+       done
++
+       git am --ignore-whitespace $CRAFT_PROJECT_DIR/envoy-fixes.patch
++      git apply $CRAFT_PROJECT_DIR/0003-cilium-proxy-riscv64.patch
++
++      # aspect_bazel_lib has no yq for riscv64, patch 0010 links this one.
++      snap refresh go --channel 1.26-fips/stable
++      GOBIN=/usr/local/bin go install github.com/mikefarah/yq/v4@v4.24.4
+ 
+       make -C proxylib all
+       mkdir -p $CRAFT_PART_INSTALL/usr/lib/
+       cp proxylib/libcilium.so $CRAFT_PART_INSTALL/usr/lib/
+       cp proxylib/libcilium.so /usr/lib/
+       git rev-parse HEAD >SOURCE_VERSION
 -      make bazel-bin/cilium-envoy
 -      make install
--      rm -rf /root/.cache/bazel
--
++      BAZELRC_FILE=$PWD/clang.bazelrc bazel/setup_clang.sh /usr/lib/llvm-18
++      make BAZEL_OPTS="--bazelrc=$CRAFT_PROJECT_DIR/riscv64.bazelrc" \
++        bazel-bin/cilium-envoy
++      make BAZEL_OPTS="--bazelrc=$CRAFT_PROJECT_DIR/riscv64.bazelrc" install
+       rm -rf /root/.cache/bazel
+ 
    builder-img-deps:
-     plugin: nil
-     build-packages:
-@@ -342,28 +224,12 @@ parts:
+@@ -342,28 +312,12 @@ parts:
    openssl:
      plugin: nil
      stage-packages:
 -      - openssl-fips-module-3 # a Pro only FIPS package for openssl
 -      - openssl # now automatically selected from fips-preview
--
++      # No openssl-fips-module-3: the Ubuntu Pro fips-updates archive does
++      # not provide it for riscv64.
++      - openssl
+ 
 -  zig:
 -    plugin: nil
 -    build-packages:
@@ -158,10 +204,7 @@ index e5d3c7b..92eccdf 100644
 -      if [ "$CRAFT_ARCH_BUILD_FOR" = "arm64" ]; then
 -        ARCH=aarch64
 -      fi
-+      # No openssl-fips-module-3: the Ubuntu Pro fips-updates archive does
-+      # not provide it for riscv64.
-+      - openssl
- 
+-
 -      curl -L https://ziglang.org/download/0.15.2/zig-$ARCH-linux-0.15.2.tar.xz -o zig.tar.xz
 -      mkdir -p /zig
 -      tar --strip-components 1 -xf zig.tar.xz -C /zig
@@ -174,7 +217,7 @@ index e5d3c7b..92eccdf 100644
      plugin: make
      source-type: git
      source: https://github.com/cilium/cilium.git
-@@ -391,8 +257,12 @@ parts:
+@@ -391,8 +345,12 @@ parts:
        # NOTE (mateoflorido): Patch Cilium Makefiles to use FIPS-compatible build flags
        find . -name "Makefile*" -exec sed -i 's/CGO_ENABLED=0/CGO_ENABLED=1/g' {} \;
  
@@ -189,7 +232,7 @@ index e5d3c7b..92eccdf 100644
  
        make install-container-binary
        make install-bash-completion
-@@ -410,37 +280,16 @@ parts:
+@@ -410,37 +368,16 @@ parts:
        craftctl default
        rm -rf /root/.cache/go-build
    

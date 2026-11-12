@@ -1,5 +1,7 @@
 #!/bin/bash
-# Build the cilium agent rock for riscv64 on a riscv64 host.
+# Build the cilium agent rock for riscv64 on a riscv64 host. The rock
+# contains cilium-envoy, built with a Bazel that is built from source
+# first (about 6 hours in total on 6 cores, 24 GiB RAM and 24 GiB swap).
 # Usage: ./build.sh [workdir]
 set -euo pipefail
 
@@ -17,7 +19,12 @@ git checkout -q -B riscv64 "$COMMIT"
 git apply "$HERE/0001-riscv64-build.patch"
 
 cd 1.20.0/cilium
-cp "$HERE/0002-riscv64-bpf-any-alignment.patch" .
+for f in 0002-riscv64-bpf-any-alignment.patch \
+         0003-cilium-proxy-riscv64.patch \
+         bazel-from-source.sh bazel-abseil-no-rdcycle.patch \
+         bazel-rules-java-jni.patch riscv64.bazelrc; do
+  cp "$HERE/$f" .
+done
 # rockcraft needs a terminal
 script -qfec 'rockcraft pack --verbosity=verbose' /tmp/rock-cilium.out
 ls -l cilium_1.20.0_riscv64.rock

@@ -21,4 +21,3 @@ metallb-controller	metallb-controller.tar	ghcr.io/canonical/metallb-controller:v
 metallb-speaker	metallb-speaker.tar	ghcr.io/canonical/metallb-speaker:v0.16.1-ck0	v0.16.1-ck0-riscv64.1
 frr	frr.tar	ghcr.io/canonical/frr:10.4.3-ck0	10.4.3-ck0-riscv64.1
 frr-k8s	frr-k8s.tar	ghcr.io/canonical/frr-k8s:v0.0.25-ck0	v0.0.25-ck0-riscv64.1
-cilium-envoy	cilium-envoy.tar	quay.io/cilium/cilium-envoy:v1.37.7-riscv64	v1.37.7-riscv64.1

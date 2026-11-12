@@ -1,5 +1,5 @@
-# Options for building on riscv64. Used by build.sh via
-# BAZEL_BUILD_OPTS=--bazelrc=<this file> (see build.sh).
+# Options for building cilium-envoy on riscv64. Passed to Bazel as
+# --bazelrc=<this file> by rockcraft.yaml (part cilium-envoy).
 
 # There are no remote JDKs for riscv64, run on the installed JDK 21
 # (the local JDK also provides compile toolchains for language level 11).
