@@ -1,0 +1,24 @@
+# Images of the riscv64 k8s snap.
+# Columns, separated by tabs:
+#   hub repository (below docker.io/<user>/), tar file (relative to
+#   $TARDIR or absolute), reference inside the tar (the name the snap or
+#   the chart asks for), tag on Docker Hub.
+# Hub tags are immutable by convention: <original tag>-riscv64.<N>.
+# A tar of "-" means: already on Hub under the given tag, publish.sh
+# skips it (pause: docker.io/xypron/pause:3.10 exists).
+# Used by publish.sh and fetch.sh.
+pause	-	ghcr.io/canonical/k8s-snap/pause:3.10	3.10
+coredns	coredns.tar	ghcr.io/canonical/coredns:1.14.7-ck0	1.14.7-ck0-riscv64.1
+cilium	cilium.new.tar	ghcr.io/canonical/cilium:1.20.0-ck0	1.20.0-ck0-riscv64.1
+cilium-operator-generic	cilium-operator-generic.tar	ghcr.io/canonical/cilium-operator-generic:1.20.0-ck0	1.20.0-ck0-riscv64.1
+metrics-server	metrics-server.tar	ghcr.io/canonical/metrics-server:0.9.0-ck0	0.9.0-ck0-riscv64.1
+rawfile-localpv	rawfile-localpv.new.tar	ghcr.io/canonical/rawfile-localpv:0.8.3-ck5	0.8.3-ck5-riscv64.1
+csi-node-driver-registrar	csi-node-driver-registrar.tar	ghcr.io/canonical/csi-node-driver-registrar:2.17.0-ck0	2.17.0-ck0-riscv64.1
+csi-provisioner	csi-provisioner.tar	ghcr.io/canonical/csi-provisioner:6.3.0-ck0	6.3.0-ck0-riscv64.1
+csi-resizer	csi-resizer.tar	ghcr.io/canonical/csi-resizer:2.2.1-ck0	2.2.1-ck0-riscv64.1
+csi-snapshotter	csi-snapshotter.tar	ghcr.io/canonical/csi-snapshotter:8.6.0-ck0	8.6.0-ck0-riscv64.1
+metallb-controller	metallb-controller.tar	ghcr.io/canonical/metallb-controller:v0.16.1-ck0	v0.16.1-ck0-riscv64.1
+metallb-speaker	metallb-speaker.tar	ghcr.io/canonical/metallb-speaker:v0.16.1-ck0	v0.16.1-ck0-riscv64.1
+frr	frr.tar	ghcr.io/canonical/frr:10.4.3-ck0	10.4.3-ck0-riscv64.1
+frr-k8s	frr-k8s.tar	ghcr.io/canonical/frr-k8s:v0.0.25-ck0	v0.0.25-ck0-riscv64.1
+cilium-envoy	cilium-envoy.tar	quay.io/cilium/cilium-envoy:v1.37.7-riscv64	v1.37.7-riscv64.1
