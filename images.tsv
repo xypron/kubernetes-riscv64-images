@@ -9,7 +9,7 @@
 # Used by publish.sh and fetch.sh.
 pause	-	ghcr.io/canonical/k8s-snap/pause:3.10	3.10
 coredns	coredns.tar	ghcr.io/canonical/coredns:1.14.7-ck0	1.14.7-ck0-riscv64.1
-cilium	cilium.envoy.tar	ghcr.io/canonical/cilium:1.20.0-ck0	1.20.0-ck0-riscv64.1
+cilium	cilium.envoy.tar	ghcr.io/canonical/cilium:1.20.0-ck0	1.20.0-ck0-riscv64.2
 cilium-operator-generic	cilium-operator-generic.tar	ghcr.io/canonical/cilium-operator-generic:1.20.0-ck0	1.20.0-ck0-riscv64.1
 metrics-server	metrics-server.tar	ghcr.io/canonical/metrics-server:0.9.0-ck0	0.9.0-ck0-riscv64.1
 rawfile-localpv	rawfile-localpv.new.tar	ghcr.io/canonical/rawfile-localpv:0.8.3-ck5	0.8.3-ck5-riscv64.1
