@@ -13,3 +13,4 @@
 2026-11-12T13:30:44Z	docker.io/xypron/frr:10.4.3-ck0-riscv64.1	sha256:2ad2ca29ad4b52ee88679e32d6391f92185219a549f2484a958c5109c414c2fd	ghcr.io/canonical/frr:10.4.3-ck0
 2026-11-12T13:31:16Z	docker.io/xypron/frr-k8s:v0.0.25-ck0-riscv64.1	sha256:c4239714ee1d2b0d6fe3f4e8d9074f20c2aa1f73ff61a9dc36fde6264b0e7594	ghcr.io/canonical/frr-k8s:v0.0.25-ck0
 2026-11-12T13:31:50Z	docker.io/xypron/cilium-envoy:v1.37.7-riscv64.1	sha256:f2c1917dc1a59ace7bd574c26781f25456398d75fe34ecacbeb5abeea38c7546	quay.io/cilium/cilium-envoy:v1.37.7-riscv64
+2026-11-13T13:59:43Z	docker.io/xypron/cilium:1.20.0-ck0-riscv64.2	sha256:b6dad29343f61229c5d23e93dfb0c4b9d1296ed63513607f0c4865880e413195	ghcr.io/canonical/cilium:1.20.0-ck0
