@@ -1,5 +1,5 @@
 diff --git a/1.20.0/cilium/rockcraft.yaml b/1.20.0/cilium/rockcraft.yaml
-index e5d3c7b..49faa76 100644
+index e5d3c7b..c4dbb38 100644
 --- a/1.20.0/cilium/rockcraft.yaml
 +++ b/1.20.0/cilium/rockcraft.yaml
 @@ -4,31 +4,10 @@ description: This rock is a drop in replacement for the cilium/cilium image.
@@ -202,7 +202,23 @@ index e5d3c7b..49faa76 100644
  
        make -C src -j "$(nproc)"
        strip src/bpftool
-@@ -342,28 +316,12 @@ parts:
+@@ -300,11 +274,10 @@ parts:
+ 
+       ./build_linux.sh
+       strip $CRAFT_PART_BUILD/bin/loopback
+-      cp -r $CRAFT_PART_BUILD/bin $CRAFT_PART_INSTALL
+-    stage:
+-      - -bin
+-    organize:
+-      bin/loopback: cni/loopback
++      # On Ubuntu 26.04 $CRAFT_PART_INSTALL/bin is not a directory, so
++      # install the plugin directly to its final location.
++      mkdir -p $CRAFT_PART_INSTALL/cni
++      cp $CRAFT_PART_BUILD/bin/loopback $CRAFT_PART_INSTALL/cni/loopback
+ 
+   # https://github.com/cilium/cilium/blob/v1.20.0/images/cilium/Dockerfile#L45-L57
+   hubble-completion:
+@@ -342,28 +315,12 @@ parts:
    openssl:
      plugin: nil
      stage-packages:
@@ -235,7 +251,7 @@ index e5d3c7b..49faa76 100644
      plugin: make
      source-type: git
      source: https://github.com/cilium/cilium.git
-@@ -391,8 +349,12 @@ parts:
+@@ -391,8 +348,12 @@ parts:
        # NOTE (mateoflorido): Patch Cilium Makefiles to use FIPS-compatible build flags
        find . -name "Makefile*" -exec sed -i 's/CGO_ENABLED=0/CGO_ENABLED=1/g' {} \;
  
@@ -250,7 +266,7 @@ index e5d3c7b..49faa76 100644
  
        make install-container-binary
        make install-bash-completion
-@@ -410,37 +372,16 @@ parts:
+@@ -410,37 +371,16 @@ parts:
        craftctl default
        rm -rf /root/.cache/go-build
    
